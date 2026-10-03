@@ -78,16 +78,19 @@ h2{{font-size:.82rem;text-transform:uppercase;letter-spacing:.07em;color:var(--m
 ol{{padding-left:22px;margin:0}}
 ol li{{margin:10px 0}}
 code{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.87rem}}
-.station{{display:flex;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);
+.station{{display:flex;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);
   min-width:0}}
 .station:last-child{{border-bottom:none}}
-.station img{{width:104px;height:104px;flex:none;background:#fff;border-radius:8px;padding:4px}}
+.station img{{width:148px;height:148px;flex:none;background:#fff;border-radius:8px;padding:5px}}
 .station > div{{min-width:0;flex:1}}
 .sname{{font-weight:650}}
-.surl{{color:var(--muted);overflow-wrap:anywhere;word-break:break-all}}
+.surl{{color:var(--muted);font-size:.72rem;overflow-wrap:anywhere;word-break:break-all}}
 .pill{{display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:999px;
   padding:3px 10px;font-size:.8rem;color:var(--muted);margin-right:6px}}
 .good{{color:var(--good);font-weight:600}}
+.scanme{{display:flex;flex-direction:column;align-items:center;text-align:center}}
+.scanme img{{width:232px;height:232px;max-width:70vw;max-height:70vw;background:#fff;
+  border-radius:10px;padding:6px;margin:4px 0 10px}}
 ul{{padding-left:22px}} li{{margin:6px 0}}
 .btn{{display:inline-block;background:#1b1c1f;color:#fff;text-decoration:none;padding:12px 16px;
   border-radius:12px;font-weight:600;margin:4px 6px 4px 0}}
@@ -142,8 +145,17 @@ ul{{padding-left:22px}} li{{margin:6px 0}}
   <h2>Setting up a device (once each)</h2>
   <div class="card">
     <p class="sub">Point this device's camera at the station it belongs to. It is asked once
-    and never again.</p>
+    and never again. Scan these straight off the screen; they are sized for a phone.</p>
     {station_cards}
+  </div>
+
+  <h2>Try this one first</h2>
+  <div class="card scanme">
+    <img alt="Demo tag for job {esc(demo_code['code'])}"
+         src="{qr.data_uri(f"{base}/j/{demo_code['code']}", scale=10)}">
+    <p class="sub"><strong>{esc(demo_code['brand'])} {esc(demo_code['model'])}</strong>
+    for {esc(demo_code['customer'])}, currently <em>{esc(demo_code['stage'])}</em>.
+    Scan it to see what the customer sees.</p>
   </div>
 
   <h2>What it does not do yet</h2>

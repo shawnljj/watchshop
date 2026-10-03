@@ -129,7 +129,12 @@ def main():
           b"Omega" in page and b"Speedmaster" in page)
     check("it shows the current stage in words", b"Received at counter" in page)
     check("it does not leak the deposit", b"Deposit" not in page)
-    check("it does not leak station names", desk.encode() not in page)
+    # Scope the check to the page BODY. The stylesheet is inlined, so a page-wide
+    # substring test reads CSS comments as content -- it failed on a correct page
+    # because a comment explaining the header rule mentions "Intake counter".
+    body = page.split(b"</style>", 1)[-1]
+    check("it does not leak the station name",
+          b"Intake counter" not in body, "")
 
     print("\nscanning advances one stage, and history is appended")
     token = rows[1][2]

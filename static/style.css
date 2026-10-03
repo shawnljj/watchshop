@@ -134,6 +134,13 @@ details.manual > *:not(summary){margin-top:10px}
 .hero .nowlabel{font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
 .hero .nowstage{font-size:1.5rem; font-weight:700; margin:2px 0 6px}
 
+/* header on a narrow phone: the station name shortens before the totals do.
+   "Intake counter" against three totals wrapped and pushed the row apart at
+   360px, so the station half is allowed to shrink and the totals are not. */
+.bar > div:first-child{min-width:0;overflow:hidden}
+.bar .kicker, .bar h1{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.bar .totals{flex:none;white-space:nowrap}
+
 /* board: vertical stage sections on a phone, columns only when there is room.
    A horizontally scrolling kanban is a desktop habit; on a phone it hides two
    thirds of the work behind a gesture nobody discovers. */
