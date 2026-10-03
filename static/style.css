@@ -1,0 +1,192 @@
+:root{
+  --bg:#f6f6f4; --card:#fff; --ink:#111214; --muted:#6b6f76; --line:#e4e4e1;
+  --good:#0f7a4a; --bad:#b3261e; --amber:#8a5a00;
+  --accent:#1b1c1f; --accentink:#fff;
+  --r:14px; --gap:12px; --hdr:56px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#0e0f11; --card:#17181b; --ink:#f2f2f3; --muted:#9aa0a6; --line:#26282c;
+         --accent:#f2f2f3; --accentink:#111214; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font);
+  font-size:17px; line-height:1.45; -webkit-text-size-adjust:100%;
+  padding-bottom:84px;
+}
+h1{font-size:1.35rem; margin:0; letter-spacing:-.01em}
+h2{font-size:.85rem; text-transform:uppercase; letter-spacing:.06em;
+   color:var(--muted); margin:22px 0 8px; font-weight:600}
+a{color:inherit}
+.mono{font-family:var(--mono); letter-spacing:.02em}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+.grow{flex:1; min-width:0}
+
+/* header */
+.bar{
+  position:sticky; top:0; z-index:5; background:var(--bg);
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 14px; border-bottom:1px solid var(--line); min-height:var(--hdr);
+}
+.bar.plain{border-bottom:none}
+.kicker{font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+.totals{display:flex; gap:12px; font-size:.8rem; color:var(--muted)}
+.totals strong{color:var(--ink); font-size:.95rem}
+.totals .alert strong{color:var(--bad)}
+
+main{padding:14px; max-width:720px; margin:0 auto}
+
+/* the scan target: the biggest thing on the screen */
+.scanbtn{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  background:var(--accent); color:var(--accentink); border-radius:20px;
+  min-height:168px; font-size:1.15rem; font-weight:600; cursor:pointer;
+  width:100%; border:none; text-align:center; padding:18px;
+}
+.scanbtn svg{width:44px; height:44px}
+.scanbtn:active{transform:scale(.995)}
+.note{margin-top:10px; padding:10px 12px; border-radius:var(--r); background:var(--card);
+      border:1px solid var(--line); font-size:.9rem}
+
+/* buttons */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-height:48px; padding:12px 16px; border-radius:12px; border:1px solid var(--line);
+  background:var(--card); color:var(--ink); font:inherit; font-weight:600;
+  text-decoration:none; cursor:pointer;
+}
+.btn.primary{background:var(--accent); color:var(--accentink); border-color:transparent}
+.btn.ghost{background:transparent}
+.btn.huge{width:100%; min-height:64px; font-size:1.1rem; border-radius:16px}
+.btn.wide{width:100%; justify-content:flex-start}
+
+/* cards and lists */
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+      padding:14px; margin-bottom:var(--gap)}
+.watch{display:flex; justify-content:space-between; align-items:flex-start; gap:12px}
+.brand{font-size:1.1rem; font-weight:650}
+.model{color:var(--muted)}
+.serial{font-size:.85rem; color:var(--muted); text-align:right; max-width:45%; overflow-wrap:anywhere}
+.facts{margin:12px 0 0; display:grid; gap:8px}
+.facts > div{display:flex; justify-content:space-between; gap:12px}
+.facts dt{color:var(--muted); font-size:.9rem; margin:0}
+.facts dd{margin:0; text-align:right; overflow-wrap:anywhere}
+
+.list{display:flex; flex-direction:column; gap:8px}
+.row{display:flex; align-items:center; gap:10px; min-height:56px; padding:10px 12px;
+     background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+     text-decoration:none}
+.row .pill{margin-left:auto}
+.pill{font-size:.75rem; padding:4px 9px; border-radius:999px; background:var(--bg);
+      border:1px solid var(--line); color:var(--muted); white-space:nowrap}
+.pill.big{font-size:.95rem; padding:6px 12px; color:var(--ink)}
+
+/* banners */
+.banner{padding:12px 14px; border-radius:var(--r); margin-bottom:var(--gap); font-size:.95rem}
+.banner.good{background:#e8f5ee; border:1px solid #b8e0cb; color:#0a5c38}
+.banner.bad{background:#fdecea; border:1px solid #f3c2bd; color:#8c1d16}
+@media (prefers-color-scheme:dark){
+  .banner.good{background:#10251b; border-color:#1f4a35; color:#8fd8b2}
+  .banner.bad{background:#2a1614; border-color:#4d2621; color:#f0a9a2}
+}
+
+/* forms */
+.form label,.formrow label{display:block; margin-bottom:14px; font-size:.85rem; color:var(--muted)}
+.form input,.form textarea,.form select,.inline input,
+input,textarea,select{
+  width:100%; margin-top:6px; padding:13px 12px; font:inherit; font-size:17px;
+  border:1px solid var(--line); border-radius:12px; background:var(--card); color:var(--ink);
+}
+textarea{resize:vertical}
+.form .two{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.inline{display:flex; gap:8px; align-items:stretch; margin-top:8px}
+.inline input{margin-top:0}
+details.manual{margin-top:var(--gap); border:1px solid var(--line); border-radius:var(--r);
+               background:var(--card); padding:12px 14px}
+details.manual summary{cursor:pointer; font-weight:600; min-height:44px;
+                       display:flex; align-items:center; list-style:none}
+details.manual summary::-webkit-details-marker{display:none}
+details.manual summary::after{content:"+"; margin-left:auto; color:var(--muted); font-weight:400}
+details.manual[open] summary::after{content:"–"}
+details.manual > *:not(summary){margin-top:10px}
+/* an inline prose link is not a tap target, but this one is a destination */
+.changestation{display:inline-flex; align-items:center; min-height:44px; font-weight:600}
+
+/* timeline and steps */
+.timeline{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:2px}
+.timeline li{display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; background:var(--card);
+             border:1px solid var(--line); border-radius:10px; font-size:.92rem}
+.timeline .when{color:var(--muted); font-variant-numeric:tabular-nums; min-width:112px}
+.timeline .what{font-weight:600}
+.timeline .who{color:var(--muted); font-size:.85rem; margin-left:auto; text-align:right}
+
+.steps{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0}
+.steps li{display:flex; align-items:center; gap:12px; padding:12px 2px; border-bottom:1px solid var(--line)}
+.steps li:last-child{border-bottom:none}
+.steps .dot{width:12px; height:12px; border-radius:50%; border:2px solid var(--line); flex:none}
+.steps li.done .dot{background:var(--good); border-color:var(--good)}
+.steps li.ahead{color:var(--muted)}
+.steps li.done .label{font-weight:600}
+.hero .nowlabel{font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.hero .nowstage{font-size:1.5rem; font-weight:700; margin:2px 0 6px}
+
+/* board: vertical stage sections on a phone, columns only when there is room.
+   A horizontally scrolling kanban is a desktop habit; on a phone it hides two
+   thirds of the work behind a gesture nobody discovers. */
+.board{display:flex; flex-direction:column; gap:10px}
+.col{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:12px}
+.col.closed{opacity:.75}
+.col h3{margin:0 0 10px; font-size:.9rem; display:flex; justify-content:space-between; gap:8px}
+.col .count{color:var(--muted); font-variant-numeric:tabular-nums}
+.col .colbody{display:flex; flex-direction:column; gap:8px}
+.jcard{display:flex; flex-direction:column; gap:2px; padding:12px; min-height:56px;
+       border:1px solid var(--line); border-radius:10px; text-decoration:none;
+       background:var(--bg); justify-content:center}
+.jcard.late{border-color:var(--bad)}
+.jcard .jbrand{font-weight:600}
+.jcard .jmeta{font-size:.8rem; color:var(--muted)}
+.stucklist{margin:0; padding-left:18px; display:flex; flex-direction:column; gap:6px}
+
+/* tag */
+.tagwrap{display:flex; flex-direction:column; align-items:center; gap:12px}
+.tag{background:#fff; color:#111; border:1px solid var(--line); border-radius:12px;
+     padding:14px; display:flex; gap:14px; align-items:center; width:100%; max-width:420px}
+.tagqr svg{width:132px; height:132px; display:block}
+.tagmeta{min-width:0}
+.tagcode{font-size:1.25rem; font-weight:700; letter-spacing:.04em}
+.tagcust{font-weight:600; margin-top:2px}
+.tagwatch,.tagserial{font-size:.85rem; color:#444; overflow-wrap:anywhere}
+.tagurl{font-size:.7rem; color:#666; margin-top:6px; overflow-wrap:anywhere}
+
+@media print{
+  body{background:#fff; padding:0}
+  .noprint,.tabbar{display:none !important}
+  .tag{border:none; box-shadow:none; max-width:none}
+  .tagqr svg{width:180px; height:180px}
+}
+
+/* station tab bar: two destinations, always visible, thumb reach */
+.tabbar{
+  position:fixed; left:0; right:0; bottom:0; z-index:6;
+  display:grid; grid-template-columns:repeat(3,1fr);
+  background:var(--card); border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.tabbar a{
+  min-height:58px; display:flex; align-items:center; justify-content:center;
+  text-decoration:none; font-weight:600; font-size:.95rem; color:var(--muted);
+  border-right:1px solid var(--line);
+}
+.tabbar a:last-child{border-right:none}
+.tabbar a:active{background:var(--bg)}
+
+@media (min-width:760px){
+  .board{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px}
+  .col{padding:12px}
+  .col .colbody{min-height:40px}
+  main{max-width:1100px}
+}

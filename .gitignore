@@ -1,0 +1,7 @@
+.DS_Store
+__pycache__/
+*.pyc
+# The live database is workshop data, not source. A fresh clone starts empty.
+watchshop.db
+watchshop.db-wal
+watchshop.db-shm
