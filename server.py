@@ -142,9 +142,10 @@ def page(title, body, station=None, nav=True, extra=""):
     if nav and station:
         nav_html = f"""
 <nav class="tabbar">
-  <a href="/st/{esc(station['token'])}">{"<span>Scan</span>" }</a>
+  <a href="/st/{esc(station['token'])}">Scan</a>
   <a href="/board">Board</a>
   <a href="/intake">Intake</a>
+  <a href="/customers">Customers</a>
 </nav>"""
     return f"""<!doctype html>
 <html lang="en">
@@ -164,24 +165,28 @@ def page(title, body, station=None, nav=True, extra=""):
 
 
 def render_scan(conn, station):
+    # A bench shows the work in its own shop, not the whole business: two
+    # counters' jobs interleaved is a list nobody can action.
+    store_id = station.get("store_id")
     jobs = [dict(r) for r in conn.execute(
         """SELECT j.code, j.customer, j.brand, j.model, s.name AS stage_name,
                   e.at AS since
              FROM job j JOIN stage s ON s.id = j.stage_id
              LEFT JOIN event e ON e.id = (SELECT MAX(id) FROM event WHERE job_id = j.id)
-            WHERE s.is_closed = 0
-            ORDER BY e.at DESC LIMIT 8""")]
+            WHERE s.is_closed = 0 AND (? IS NULL OR j.store_id = ?)
+            ORDER BY e.at DESC LIMIT 8""", (store_id, store_id))]
+    store_line = (f" · {esc(station['store_name'])}" if station.get("store_name") else "")
     recent = "".join(
         f"""<a class="row" href="/st/{esc(station['token'])}/move/{esc(j['code'])}">
               <span class="mono">{esc(j['code'])}</span>
               <span class="grow">{esc(j['brand'])} {esc(j['model']) or 'watch'}</span>
               <span class="pill">{esc(j['stage_name'])}</span>
-            </a>""" for j in jobs) or '<p class="muted">No open jobs yet.</p>'
+            </a>""" for j in jobs) or '<p class="muted">No open jobs for this shop yet.</p>'
 
     body = f"""
 <header class="bar">
   <div>
-    <div class="kicker">Station</div>
+    <div class="kicker">Station{store_line}</div>
     <h1>{esc(station['name'])}</h1>
   </div>
   <a class="btn ghost" href="/board">Board</a>
@@ -227,8 +232,26 @@ def render_move(conn, station, code, moved=None, error=None):
     if moved:
         banner = f"""<div class="banner good">Moved to <strong>{esc(moved['stage']['name'])}</strong>.
         {esc(STAGE_BLURB.get(moved['stage']['key'], ''))}</div>"""
+        # A handover is the last event on the job, not a difference between the
+        # job's shop and this device's: by the time the page renders, db.move has
+        # already moved the job, so the two always agree.
+        last = (moved.get("timeline") or [{}])[-1]
+        if last.get("kind") == "transfer" and moved.get("store"):
+            banner = f"""<div class="banner good">Handed to <strong>{esc(moved['store']['name'])}</strong>
+            and moved to {esc(moved['stage']['name'])}. It now shows on that shop's board.</div>"""
     if error:
         banner = f"""<div class="banner bad">{esc(error)}</div>"""
+
+    # Scanned at a bench whose shop is not this job's: say so before the tap,
+    # rather than silently handing someone else's watch over on the next scan.
+    elsewhere = ""
+    if (j["store"] and station.get("store_id")
+            and j["store"]["id"] != station["store_id"] and not j["stage"]["closed"]):
+        elsewhere = f"""<div class="banner">This watch is at
+        <strong>{esc(j['store']['name'])}</strong>, not {esc(station.get('store_name') or 'here')}.
+        Moving it here hands it over.</div>"""
+    cust_link = (f'<a class="tapinline" href="/customers/{j["customer_id"]}">{esc(j["customer"])}</a>'
+                 if j.get("customer_id") else esc(j["customer"]))
 
     back_block = ""
     if j["stage"]["position"] > 1:
@@ -253,6 +276,7 @@ def render_move(conn, station, code, moved=None, error=None):
 </header>
 <main>
   {banner}
+  {elsewhere}
   <section class="card">
     <div class="watch">
       <div>
@@ -262,7 +286,8 @@ def render_move(conn, station, code, moved=None, error=None):
       <div class="serial mono">{esc(j['serial']) or 'no serial'}</div>
     </div>
     <dl class="facts">
-      <div><dt>Customer</dt><dd>{esc(j['customer'])}</dd></div>
+      <div><dt>Customer</dt><dd>{cust_link}</dd></div>
+      <div><dt>Shop</dt><dd>{esc(j['store']['name']) if j['store'] else 'unassigned'}</dd></div>
       <div><dt>Now</dt><dd><span class="pill big">{esc(j['stage']['name'])}</span></dd></div>
       <div><dt>Here</dt><dd>{esc(since(j['timeline'][-1]['at']) if j['timeline'] else '')}</dd></div>
       {f'<div><dt>Promised</dt><dd>{esc(j["promise"])}</dd></div>' if j['promise'] else ''}
@@ -285,7 +310,7 @@ def render_move(conn, station, code, moved=None, error=None):
 
   <h2>History</h2>
   <ol class="timeline">
-    {''.join(f'<li><span class="when">{esc(fmt_day(e["at"]))}</span> <span class="what">{esc(e["to_name"])}</span> <span class="who">{esc(e["station"] or "counter")}{" · " + esc(e["reason"]) if e["reason"] else ""}</span></li>' for e in j['timeline'])}
+    {''.join(f'<li><span class="when">{esc(fmt_day(e["at"]))}</span> <span class="what">{esc(e["to_name"])}</span> <span class="who">{esc(("handed to " + e["store"]) if e["kind"] == "transfer" and e["store"] else (e["station"] or "counter"))}{" · " + esc(e["reason"]) if e["reason"] else ""}</span></li>' for e in j['timeline'])}
   </ol>
 </main>
 """
@@ -376,8 +401,8 @@ def render_tag(conn, station, code):
     return page(f"Tag {j['code']}", body, station)
 
 
-def render_board(conn, station=None):
-    b = db.board(conn)
+def render_board(conn, station=None, store_id=None):
+    b = db.board(conn, store_id)
     t = b["totals"]
     cols = "".join(
         f"""<section class="col{' closed' if c['closed'] else ''}">
@@ -387,13 +412,27 @@ def render_board(conn, station=None):
                        href="/st/{esc(station['token']) + '/move/' if station else ''}{esc(j['code'])}">
                        <span class="mono">{esc(j['code'])}</span>
                        <span class="jbrand">{esc(j['brand'])} {esc(j['model']) or 'watch'}</span>
-                       <span class="jmeta">{esc(j['customer'])} · {j['days_in_stage']}d</span>
+                       <span class="jmeta">{esc(j['customer'])}{' · ' + esc(j['store_name']) if store_id is None and j['store_name'] else ''} · {j['days_in_stage']}d</span>
                      </a>''' for j in c['jobs']) or '<p class="muted small">— no jobs —</p>'}</div>
             </section>""" for c in b["columns"])
     stuck = "".join(
         f"""<li><span class="mono">{esc(j['code'])}</span> {esc(j['stage_name'])}
-        <span class="muted">· {j['days_in_stage']} days</span></li>""" for j in b["stuck"]) \
+        <span class="muted">· {j['days_in_stage']} days{' at ' + esc(j['store_name']) if j['store_name'] else ''}</span></li>"""
+        for j in b["stuck"]) \
         or "<li class='muted'>Nothing sitting for a week or more.</li>"
+    # Switching shop is a filter on the same board, not a separate screen: the
+    # owner wants "how many at the other counter", not a second app.
+    if len(b["stores"]) > 1:
+        chips = "".join(
+            f'<a class="chip{" on" if st["id"] == store_id else ""}" '
+            f'href="/board?store={st["id"]}">{esc(st["name"])} '
+            f'<span class="n">{st["open_jobs"]}</span></a>'
+            for st in b["stores"])
+        chips += (f'<a class="chip{" on" if store_id is None else ""}" href="/board">'
+                  f'All shops</a>')
+        shopbar = f'<div class="shopbar">{chips}</div>'
+    else:
+        shopbar = ""
     # The whole board is served from whichever device opened it, so it must say
     # which station that is: an unlabelled board on a bench phone is ambiguous.
     who = (f'<div class="kicker">{esc(station["name"])}</div>' if station
@@ -408,6 +447,7 @@ def render_board(conn, station=None):
   </div>
 </header>
 <main class="boardpage">
+  {shopbar}
   <div class="board">{cols}</div>
   <section class="card">
     <h2>Sitting too long</h2>
@@ -417,8 +457,9 @@ def render_board(conn, station=None):
     return page("Board", body, station)
 
 
-def render_intake(conn, station, created=None, error=None):
+def render_intake(conn, station, created=None, error=None, prefill=None):
     stages = db.stages(conn)
+    stores = db.stores(conn)
     banner = ""
     if created:
         j = created
@@ -429,20 +470,37 @@ def render_intake(conn, station, created=None, error=None):
         </div>"""
     if error:
         banner = f'<div class="banner bad">{esc(error)}</div>'
+    prefill = prefill or {}
+    # A returning customer is picked from their own page, not retyped: the name is
+    # the thing the counter gets wrong, and a near-miss silently forks the history.
+    if prefill.get("id"):
+        who = f"""<input type="hidden" name="customer" value="{esc(prefill['name'])}">
+      <input type="hidden" name="contact" value="{esc(prefill.get('contact',''))}">
+      <div class="card"><div class="nowlabel">Returning customer</div>
+      <div class="jbrand">{esc(prefill['name'])}</div>
+      <div class="muted small">{esc(prefill.get('contact') or 'no number on file')}
+      · <a href="/customers/{prefill['id']}">their history</a></div></div>"""
+    else:
+        who = """<label>Customer name
+        <input name="customer" required autocomplete="off" enterkeyhint="next"></label>
+      <label>Phone or WhatsApp
+        <input name="contact" inputmode="tel" autocomplete="off"></label>"""
+    store_picker = ""
+    if len(stores) > 1:
+        opts = "".join(
+            f'<option value="{s["id"]}"{" selected" if s["id"] == station.get("store_id") else ""}>'
+            f'{esc(s["name"])}</option>' for s in stores)
+        store_picker = f'<label>Which shop <select name="store_id">{opts}</select></label>'
     body = f"""
 <header class="bar">
   <div><div class="kicker">{esc(station['name'])}</div><h1>Register a watch</h1></div>
-  <a class="btn ghost" href="/board">Board</a>
+  <a class="btn ghost" href="/customers">Customers</a>
 </header>
 <main>
   {banner}
   <form method="post" action="/api/job" class="form">
-    <label>Customer name
-      <input name="customer" required autocomplete="off" enterkeyhint="next">
-    </label>
-    <label>Phone or WhatsApp
-      <input name="contact" inputmode="tel" autocomplete="off">
-    </label>
+    {who}
+    {store_picker}
     <div class="two">
       <label>Brand <input name="brand" autocomplete="off" autocapitalize="words"></label>
       <label>Model <input name="model" autocomplete="off" autocapitalize="words"></label>
@@ -466,15 +524,207 @@ def render_intake(conn, station, created=None, error=None):
     return page("Register a watch", body, station)
 
 
+def render_customers(conn, station, q=""):
+    rows = db.customers(conn, q)
+    def line(c):
+        bits = []
+        if c["open_jobs"]:
+            bits.append(f"{c['open_jobs']} open")
+        bits.append(f"{c['jobs']} job{'s' if c['jobs'] != 1 else ''}")
+        if c["last_seen"]:
+            bits.append(f"last {since(c['last_seen'])} ago")
+        if c["contact"]:
+            bits.append(c["contact"])
+        return f"""<a class="row" href="/customers/{c['id']}">
+              <span class="grow"><span class="cname">{esc(c['name'])}</span>
+                <span class="cmeta">{esc(' · '.join(bits))}</span></span>
+              {'<span class="pill">open</span>' if c['open_jobs'] else ''}
+            </a>"""
+    listing = "".join(line(c) for c in rows) or (
+        f'<p class="muted">Nobody matches “{esc(q)}”.</p>' if q
+        else '<p class="muted">Nobody has left a watch yet.</p>')
+    body = f"""
+<header class="bar">
+  <div><div class="kicker">{esc(station['name'])}</div><h1>Customers</h1></div>
+  <a class="btn ghost" href="/intake">New watch</a>
+</header>
+<main>
+  <form class="inline" method="get" action="/customers">
+    <input name="q" value="{esc(q)}" placeholder="Name or phone" autocomplete="off"
+           autocapitalize="words" enterkeyhint="search">
+    <button class="btn">Find</button>
+  </form>
+  <h2>{len(rows)} customer{'s' if len(rows) != 1 else ''}</h2>
+  <div class="list">{listing}</div>
+  <p class="muted small">A name typed at intake is matched here, ignoring capitals:
+  registering “tan wei ming” twice is one person, not two.</p>
+</main>"""
+    return page("Customers", body, station)
+
+
+def render_customer(conn, station, cid):
+    c = db.customer_view(conn, cid)
+    if not c:
+        return page("Not found", """
+<header class="bar"><h1>No such customer</h1></header>
+<main><p class="muted">That customer is not in the book.</p>
+<p><a class="btn" href="/customers">All customers</a></p></main>""", station)
+    here = c["open_jobs"][0] if c["open_jobs"] else None
+    more = c["open_jobs"][1:]
+
+    def job_card(j, show_stage=True):
+        return f"""<a class="jcard" href="/j/{esc(j['code'])}">
+              <span class="mono">{esc(j['code'])}</span>
+              <span class="jbrand">{esc(j['brand'])} {esc(j['model']) or 'watch'}</span>
+              <span class="jmeta">{esc(j['stage_name'])} · in {since(j['created_at'])}
+              {('· ' + esc(j['store_name'])) if j['store_name'] else ''}</span>
+              {f'<span class="jmeta">{esc(j["notes"])}</span>' if j['notes'] else ''}
+            </a>"""
+
+    open_list = "".join(job_card(j) for j in more)
+    past_list = "".join(job_card(j) for j in c["past_jobs"]) or (
+        '<p class="muted small">No finished jobs yet.</p>')
+    contact_line = (f'<a class="btn ghost" href="tel:{esc(c["contact"].replace(" ", ""))}">'
+                    f'Call {esc(c["contact"])}</a>' if c["contact"] else "")
+    body = f"""
+<header class="bar">
+  <div><div class="kicker">{c['totals']['jobs']} jobs on file</div>
+  <h1>{esc(c['name'])}</h1></div>
+  <a class="btn ghost" href="/customers">All</a>
+</header>
+<main>
+  {f'''<section class="card">
+    <div class="nowlabel">Right now</div>
+    <div class="nowstage">{esc(here['stage_name'])}</div>
+    <p class="muted">{esc(here['brand'])} {esc(here['model'])} · <span class="mono">{esc(here['code'])}</span></p>
+    <p><a class="btn" href="/j/{esc(here['code'])}">Open the customer page</a></p>
+  </section>''' if here else ''}
+
+  <section class="card">
+    <dl class="facts">
+      <div><dt>Phone</dt><dd>{esc(c['contact']) or 'not recorded'}</dd></div>
+      <div><dt>First seen</dt><dd>{esc(fmt_day(c['first_seen']))}</dd></div>
+      <div><dt>Last seen</dt><dd>{esc(since(c['last_seen']) + ' ago') if c['last_seen'] else '—'}</dd></div>
+      <div><dt>Open jobs</dt><dd>{c['totals']['open']}</dd></div>
+      <div><dt>Held in deposits</dt><dd>${c['totals']['deposit']:,}</dd></div>
+      {f'<div><dt>Note</dt><dd>{esc(c["notes"])}</dd></div>' if c['notes'] else ''}
+    </dl>
+    {contact_line}
+  </section>
+
+  <p><a class="btn primary wide" href="/intake?customer={c['id']}">
+    Register another watch for {esc(c['name'].split()[0])}</a></p>
+
+  <h2>Open</h2>
+  <div class="list">{open_list or ('<p class="muted small">Nothing with us right now.</p>' if not here else '')}</div>
+
+  <h2>Past jobs</h2>
+  <div class="list">{past_list}</div>
+</main>"""
+    return page(f"{c['name']} · customers", body, station)
+
+
+def render_shops(conn, station, new_station=None, error=None, focus_id=None):
+    stores = db.stores(conn)
+    # Every bench's setup code is reachable again: a phone is wiped, replaced, or
+    # handed to a new starter, and reprinting a code beats minting a second bench.
+    benches = {s["id"]: [] for s in stores}
+    for st in db.stations(conn):
+        benches.setdefault(st["store_id"], []).append(st)
+    focus = None
+    if new_station:
+        focus = {"id": new_station["id"], "name": new_station["name"],
+                 "store_name": new_station.get("store_name", ""),
+                 "token": new_station["token"]}
+    elif focus_id:
+        row = db.station_by_id(conn, focus_id)
+        focus = dict(row) if row else None
+    cards = ""
+    for s in stores:
+        rows = "".join(
+            f"""<div class="station">
+                  <div>
+                    <div class="sname">{esc(b['name'])}</div>
+                    <div class="surl mono">{esc(lan_base())}/st/{esc(b['token'][:6])}…</div>
+                  </div>
+                  <a class="btn ghost" href="/shops?station={b['id']}">Code</a>
+                  <a class="btn ghost" href="/st/{esc(b['token'])}">Open</a>
+                </div>""" for b in benches.get(s["id"], []))
+        cards += f"""<section class="card">
+          <div class="watch"><div>
+            <div class="brand">{esc(s['name'])}</div>
+            <div class="model">{esc(s['address']) or 'no address recorded'}</div>
+          </div><div class="serial">{s['open_jobs']} open · {s['benches']} bench{'es' if s['benches'] != 1 else ''}</div></div>
+          <div class="benches">{rows or '<p class="muted small">No benches yet.</p>'}</div>
+        </section>"""
+
+    if focus:
+        url = f"{lan_base()}/st/{focus['token']}"
+        setup_card = f"""<section class="card scanme">
+          <img alt="Setup code for {esc(focus['name'])}"
+               src="{qr.data_uri(url, scale=8)}">
+          <p class="sub"><strong>{esc(focus['name'])}</strong> is ready
+          {('at ' + esc(focus['store_name'])) if focus.get('store_name') else ''}.
+          Print this or open it on that device once.</p>
+          <p class="mono surl">{esc(url)}</p>
+        </section>"""
+    else:
+        setup_card = ""
+
+    store_opts = "".join(
+        f'<option value="{s["id"]}">{esc(s["name"])}</option>' for s in stores)
+    body = f"""
+<header class="bar">
+  <div><div class="kicker">{esc(station['name'])}</div><h1>Shops and benches</h1></div>
+  <a class="btn ghost" href="/board">Board</a>
+</header>
+<main>
+  {f'<div class="banner bad">{esc(error)}</div>' if error else ''}
+  {setup_card}
+  {cards}
+
+  <h2>Add a bench</h2>
+  <section class="card">
+    <form method="post" action="/api/station" class="form">
+      <label>What is it <input name="name" placeholder="e.g. Bench 3"
+             autocomplete="off" autocapitalize="words" required></label>
+      <label>Which shop <select name="store_id">{store_opts}</select></label>
+      <button class="btn primary huge">Create the bench and its code</button>
+    </form>
+    <p class="muted small">A bench is a device, not a person. The code prints once
+    and the phone never asks again.</p>
+  </section>
+
+  <h2>Add a shop</h2>
+  <section class="card">
+    <form method="post" action="/api/store" class="form">
+      <label>Shop name <input name="name" placeholder="e.g. Orchard"
+             autocomplete="off" autocapitalize="words" required></label>
+      <label>Address <input name="address" autocomplete="off"></label>
+      <button class="btn ghost huge">Add the shop</button>
+    </form>
+    <p class="muted small">Work sitting at another shop still shows on that shop's
+    board; scanning it at a bench here hands it over.</p>
+  </section>
+</main>"""
+    return page("Shops and benches", body, station)
+
+
 def render_login(conn, error=None):
-    stations = db.stations(conn)
-    rows = "".join(
-        f"""<form method="post" action="/setup" class="row formrow">
+    groups = {}
+    for s in db.stations(conn):
+        groups.setdefault(s.get("store_name") or "Shop", []).append(s)
+    rows = ""
+    for shop, items in groups.items():
+        if len(groups) > 1:
+            rows += f'<div class="storecap">{esc(shop)}</div>'
+        rows += "".join(
+            f"""<form method="post" action="/setup" class="row formrow">
               <input type="hidden" name="station_id" value="{s['id']}">
               <button class="btn ghost wide">{esc(s['name'])}</button>
-            </form>""" for s in stations)
+            </form>""" for s in items)
     body = f"""
-<header class="bar plain"><div><div class="kicker">Watch workshop</div><h1>Which station is this?</h1></div></header>
+<header class="bar plain"><div><div class="kicker">{esc('Watch workshop')}</div><h1>Which station is this?</h1></div></header>
 <main>
   {'<div class="banner bad">' + esc(error) + '</div>' if error else ''}
   <p class="muted">Pick the station this device sits at, or enter the station code
@@ -487,6 +737,8 @@ def render_login(conn, error=None):
       <button class="btn">Use this device</button>
     </form>
   </details>
+  <p class="muted small">Setting up a new bench, or a second shop?
+  <a class="changestation" href="/shops">Shops and benches</a>.</p>
 </main>"""
     return page("Choose a station", body, nav=False)
 
@@ -617,7 +869,30 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/board":
             if not st:
                 return self.redirect("/login")
-            return self.send_html(render_board(self.conn, st))
+            sid = (q.get("store") or [""])[0].strip()
+            store_id = int(sid) if sid.isdigit() else None
+            return self.send_html(render_board(self.conn, st, store_id))
+
+        if path == "/customers":
+            if not st:
+                return self.redirect("/login")
+            return self.send_html(render_customers(self.conn, st, (q.get("q") or [""])[0]))
+
+        m = re.fullmatch(r"/customers/(\d+)", path)
+        if m:
+            if not st:
+                return self.redirect("/login")
+            cid = int(m.group(1))
+            if not db.customer_view(self.conn, cid):
+                return self.send_html(render_customer(self.conn, st, cid), 404)
+            return self.send_html(render_customer(self.conn, st, cid))
+
+        if path == "/shops":
+            if not st:
+                return self.redirect("/login")
+            sid = (q.get("station") or [""])[0].strip()
+            return self.send_html(render_shops(
+                self.conn, st, focus_id=int(sid) if sid.isdigit() else None))
 
         m = re.fullmatch(r"/st/([A-Za-z0-9]+)", path)
         if m:
@@ -640,7 +915,12 @@ class Handler(BaseHTTPRequestHandler):
             row = db.station_by_token(self.conn, m.group(1))
             if not row:
                 return self.send_html(render_login(self.conn), 404)
-            return self.send_html(render_move(self.conn, dict(row), m.group(2)))
+            # ?moved=1 is what the POST redirects with. Without reading it here
+            # the confirmation banner was dead code: a scan advanced the job and
+            # the bench saw no acknowledgement at all.
+            moved = (db.job_view(self.conn, m.group(2))
+                     if (q.get("moved") or [""])[0] else None)
+            return self.send_html(render_move(self.conn, dict(row), m.group(2), moved=moved))
 
         m = re.fullmatch(r"/st/([A-Za-z0-9]+)/move/?", path)
         if m:
@@ -662,7 +942,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/intake":
             if not st:
                 return self.redirect("/login")
-            return self.send_html(render_intake(self.conn, st))
+            prefill = None
+            cid = (q.get("customer") or [""])[0].strip()
+            if cid.isdigit():
+                c = db.customer_view(self.conn, int(cid))
+                if c:
+                    prefill = {"id": c["id"], "name": c["name"], "contact": c["contact"]}
+            return self.send_html(render_intake(self.conn, st, prefill=prefill))
 
         return self.send_html(render_login(self.conn, "Page not found."), 404)
 
@@ -717,12 +1003,30 @@ class Handler(BaseHTTPRequestHandler):
             if not customer:
                 return self.send_html(render_intake(self.conn, st, error="Customer name is required."), 400)
             deposit = re.sub(r"[^0-9]", "", form.get("deposit") or "") or "0"
+            raw_store = str(form.get("store_id") or "").strip()
+            store_id = int(raw_store) if raw_store.isdigit() else (st.get("store_id") or 0)
             created = db.create_job(
                 self.conn, customer, form.get("contact", "").strip(),
                 form.get("brand", "").strip(), form.get("model", "").strip(),
                 form.get("serial", "").strip(), form.get("notes", "").strip(),
-                int(deposit), form.get("promise", "").strip())
+                int(deposit), form.get("promise", "").strip(), store_id)
             return self.redirect(f"/st/{st['token']}/tag/{created['code']}")
+
+        if path == "/api/station":
+            name = (form.get("name") or "").strip()
+            store_id = (form.get("store_id") or "").strip()
+            store_id = int(store_id) if store_id.isdigit() else st.get("store_id")
+            made = db.create_station(self.conn, name, store_id)
+            if made.get("error"):
+                return self.send_html(render_shops(self.conn, st, error=made["error"]), 400)
+            return self.send_html(render_shops(self.conn, st, new_station=made))
+
+        if path == "/api/store":
+            made = db.create_store(self.conn, form.get("name") or "",
+                                   form.get("address") or "")
+            if made.get("error"):
+                return self.send_html(render_shops(self.conn, st, error=made["error"]), 400)
+            return self.send_html(render_shops(self.conn, st))
 
         if path == "/api/uat":
             db.log_uat(self.conn, form.get("code", ""), form.get("verdict", ""),

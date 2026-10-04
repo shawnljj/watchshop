@@ -197,3 +197,34 @@ details.manual > *:not(summary){margin-top:10px}
   .col .colbody{min-height:40px}
   main{max-width:1100px}
 }
+
+/* shops and customers */
+.bar .kicker{overflow-wrap:anywhere}
+.shopbar{display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px;
+         -webkit-overflow-scrolling:touch}
+.chip{display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:8px 14px;
+      border:1px solid var(--line); border-radius:999px; background:var(--card);
+      text-decoration:none; font-weight:600; font-size:.9rem; white-space:nowrap; flex:none}
+.chip .n{color:var(--muted); font-variant-numeric:tabular-nums}
+.chip.on{background:var(--accent); color:var(--accentink); border-color:transparent}
+.chip.on .n{color:var(--accentink); opacity:.75}
+.station{display:flex; gap:12px; align-items:center; padding:10px 0;
+         border-bottom:1px solid var(--line); min-width:0}
+.station:last-child{border-bottom:none}
+.station > div{min-width:0; flex:1}
+.sname{font-weight:650}
+.surl{color:var(--muted); font-size:.72rem; overflow-wrap:anywhere}
+.benches{margin-top:10px}
+.storecap{font-size:.72rem; text-transform:uppercase; letter-spacing:.08em;
+          color:var(--muted); margin:14px 0 2px; font-weight:600}
+.cname{font-weight:600; display:block; overflow-wrap:anywhere}
+.cmeta{display:block; font-size:.8rem; color:var(--muted); overflow-wrap:anywhere}
+.sub{margin:0 0 6px}
+.scanme{display:flex; flex-direction:column; align-items:center; text-align:center}
+.scanme img{width:224px; height:224px; max-width:70vw; max-height:70vw; background:#fff;
+            border-radius:10px; padding:6px; margin:4px 0 10px}
+.card .surl{margin-top:4px}
+/* A text link that is a real destination on a phone still has to be a thumb
+   target: the customer's name inside a job's facts row is the way to their
+   history, so it is sized like a control rather than left as 20px of text. */
+.tapinline{display:inline-flex; align-items:center; min-height:44px}

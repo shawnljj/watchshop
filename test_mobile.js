@@ -17,6 +17,7 @@ const { chromium } = require('playwright');
 const BASE = process.argv[2] || 'http://127.0.0.1:8451';
 const TOKEN = process.argv[3];
 const CODE = process.argv[4];
+const CUSTOMER = process.argv[5];
 
 const PAGES = [
   ['login', '/login'],
@@ -26,7 +27,9 @@ const PAGES = [
   ['intake', '/intake'],
   ['board', '/board'],
   ['customer', `/j/${CODE}`],
-];
+  ['customers', '/customers'],
+  ['shops', '/shops'],
+].concat(CUSTOMER ? [['one customer', `/customers/${CUSTOMER}`]] : []);
 
 (async () => {
   const browser = await chromium.launch();

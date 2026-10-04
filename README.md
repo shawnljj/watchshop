@@ -11,6 +11,8 @@ would feel like, and to get his real process out of him. The stage list in
 ## The workflow
 
 1. **Register a watch** at the counter. It gets a 10-character code and a tag.
+   The customer's name is matched against the book, so a regular is one person
+   rather than one row per visit.
 2. **Print the tag.** The tag carries a QR code whose payload is a short URL.
 3. **Scan the tag at a station.** The job advances one stage, timestamped, with
    the station recorded. The customer's page changes with it.
@@ -19,6 +21,12 @@ would feel like, and to get his real process out of him. The stage list in
 
 The label goes on the bag the watch goes into, **not on the watch**: a sticker
 does not survive a cleaning bath, and it is a liability on someone's Patek.
+
+Three nouns do the work, and keeping them apart is the whole design:
+
+- A **shop** is a counter. Work sits in exactly one of them.
+- A **bench** is a device. It belongs to a shop and is what a phone is bound to.
+- A **customer** is a person, with a history that spans shops.
 
 ## Mobile-first, and mobile-only
 
@@ -62,13 +70,15 @@ data from the shop.
 
 | table | what it holds |
 |---|---|
+| `store` | a counter. One row per place work happens |
 | `stage` | the bench flow, editable — the shop's real steps go here |
-| `station` | one row per device location, each with its own token |
-| `job` | the watch, the customer, the promise date, the current stage |
-| `event` | **append-only** history: every stage change, who made it, when |
+| `station` | one row per device location, each with its own token, belonging to a store |
+| `customer` | a person, matched by name, so a history exists at all |
+| `job` | the watch, the customer, the promise date, the current stage, the shop holding it |
+| `event` | **append-only** history: every stage change, handover, who made it, when |
 | `uat` | one row per verdict logged while the owner is looking at it |
 
-Two decisions worth keeping:
+Four decisions worth keeping:
 
 - **History is appended, never overwritten.** The current stage is a pointer
   (`job.stage_id`); the timeline is the `event` rows. A job that goes backwards
@@ -76,13 +86,27 @@ Two decisions worth keeping:
 - **The station is the device, not the person.** No per-user accounts: the shop
   is small, and typing a name at every scan is exactly the friction that makes
   staff abandon a system.
+- **A job points at a customer row, not at a typed name** (`job.customer_id`).
+  The name is still on the job for display and for a database read by hand, but
+  the link is the id; matching is case-insensitive, so "tan wei ming" and
+  "Tan Wei Ming" are one person. Without that link there is no history to show.
+- **A handover is an event, not a stage.** Scanning a job at a bench belonging
+  to another shop records a `transfer` with the reason and moves `job.store_id`.
+  The watch does not go backwards or forwards to change hands, so the stage list
+  stays the shop's own vocabulary.
+
+An older database is migrated on open (`db._migrate`): jobs and stations
+backfill to one implied shop, and every name already typed into `job.customer`
+becomes a customer row. Workshop data is not source and cannot simply be
+deleted, so `init()` upgrades it rather than starting again. Indexes are created
+after the migration for the same reason.
 
 ## Gates
 
 ```bash
 python3 test_qr.py                            # encoder: message bits, EC level, real decode
 python3 test_e2e.py http://127.0.0.1:8451     # the whole workflow over HTTP
-NODE_PATH=/opt/homebrew/lib/node_modules node test_mobile.js <url> <station-token> <job-code>
+NODE_PATH=/opt/homebrew/lib/node_modules node test_mobile.js <url> <station-token> <job-code> [customer-id]
 ```
 
 `test_e2e.py` needs a running server on a scratch database:
@@ -104,13 +128,35 @@ Each gate has been observed failing, which is the only reason to trust it:
   the pad codewords after the terminator are implementation-defined and segno
   writes an extra `0x00`; and a small corruption is repaired by error correction,
   so an injection probe must corrupt past the EC budget to prove anything.
+- `test_e2e.py` found the shared-SQLite-connection crash under two devices, a
+  `KeyError` on the customer timeline, and — once the confirmation banner was
+  finally reachable — that the banner had never been reachable at all: the POST
+  redirects with `?moved=1` and the GET route ignored it, so a bench scanned a
+  tag and got no acknowledgement. A check that could not fail had been hiding it.
+- Its QR decode was flaky rather than wrong: the served PNG is ~200px, smaller
+  than anything a camera sees, so the check now upscales nearest-neighbour
+  before asking OpenCV to read it.
 - `test_mobile.js` found the horizontally scrolling board, 44 sub-44px tap
-  targets, and a title-inside-sticky-header false positive in its own check.
-- `test_e2e.py` found the shared-SQLite-connection crash under two devices and a
-  `KeyError` on the customer timeline.
+  targets, a title-inside-sticky-header false positive in its own check, and —
+  on the customer's name inside a job's facts row — a 20px text link that was
+  the only route to someone's history.
 
 ## What this deliberately does not do
 
 No payments, no parts inventory, no SMS or WhatsApp sending, no estimates or
-customer approval. The stage list, the promise dates and the deposit field are
-the parts most likely to change once the shop describes its real process.
+customer approval, no takings report, no passwords anywhere.
+
+The two that would change what this is:
+
+- **Money stays out.** Deposits are a number on the job. Invoicing, parts cost
+  and job value are the features that turn a tracker into an accounts package,
+  and the shop already has an accounts package.
+- **No login is the product.** A phone is trusted because it was set up at a
+  bench, with a signed cookie and no password. That is worth more to a two-bench
+  workshop than any permission model; the cost is that a lost phone can move
+  work until somebody unbinds it, which is one line at the counter.
+
+The stage list, the promise dates and the deposit field are the parts most
+likely to change once the shop describes its real process. Whether a watch ever
+crosses between counters, and who owns it while it is away, is the question this
+build cannot answer for them.
